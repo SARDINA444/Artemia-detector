@@ -8,10 +8,11 @@ import torch
 import numpy as np
 import pathlib
 import sys
-import uvicorn
+
 
 if sys.platform.startswith('win'):
     pathlib.PosixPath = pathlib.WindowsPath
+
 
 model = torch.hub.load("ultralytics/yolov5", "custom", path="weights/best.pt")
 device = torch.device('cpu')
@@ -74,5 +75,3 @@ async def process_file(file: UploadFile = File(...)):
         return StreamingResponse(iterfile(), media_type="video/mp4",
                                  headers={"Content-Disposition": f"attachment; filename=processed_{filename}"})
 
-if __name__ == "__main__":
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)

@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+torch
+opencv-python
+pillow
+seaborn
+numpy
+requests
