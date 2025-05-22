@@ -1,11 +1,21 @@
 from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import StreamingResponse
 import io
-import pandas as pd
 from PIL import Image
 import cv2
 import tempfile
+import torch
+import numpy as np
+import pathlib
+import sys
+import uvicorn
 
+if sys.platform.startswith('win'):
+    pathlib.PosixPath = pathlib.WindowsPath
+
+model = torch.hub.load("ultralytics/yolov5", "custom", path="weights/best.pt")
+device = torch.device('cpu')
+model.to(device)
 app = FastAPI()
 
 
@@ -19,13 +29,13 @@ async def process_file(file: UploadFile = File(...)):
 
     # Обработка изображения
     if "image" in content_type:
-        # Открываем изображение с помощью PIL
-        image = Image.open(io.BytesIO(data))
-        # Пример обработки: инверсия цветов
-        inverted_image = Image.eval(image, lambda x: 255 - x)
+        pil_img = Image.open(io.BytesIO(data))
+        img = np.array(pil_img)
+        results = model(img)
+        image = Image.fromarray(*results.render())
         # Сохраняем обработанное изображение в байты
         buf = io.BytesIO()
-        inverted_image.save(buf, format='PNG')
+        image.save(buf, format='PNG')
         buf.seek(0)
         return StreamingResponse(buf, media_type="image/png",
                                  headers={"Content-Disposition": f"attachment; filename=processed_{filename}"})
@@ -37,7 +47,7 @@ async def process_file(file: UploadFile = File(...)):
             temp_input.write(data)
             temp_input_path = temp_input.name
 
-        # Обработка видео с помощью OpenCV (пример: добавление текста)
+
         cap = cv2.VideoCapture(temp_input_path)
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         out_path = temp_input_path.replace('.mp4', '_processed.mp4')
@@ -46,12 +56,13 @@ async def process_file(file: UploadFile = File(...)):
 
         while True:
             ret, frame = cap.read()
-            if not ret:
+
+            if ret == False:
                 break
-            # Пример обработки: добавление текста на кадр
-            cv2.putText(frame, 'Processed', (50, 50), cv2.FONT_HERSHEY_SIMPLEX,
-                        1, (0, 255, 0), 2)
-            out.write(frame)
+
+            results = model(frame)
+
+            out.write(*results.render())
 
         cap.release()
         out.release()
@@ -63,19 +74,5 @@ async def process_file(file: UploadFile = File(...)):
         return StreamingResponse(iterfile(), media_type="video/mp4",
                                  headers={"Content-Disposition": f"attachment; filename=processed_{filename}"})
 
-    # Генерация отчета в XLSX
-    else:
-        # Создаем пример отчета с данными о файле
-        df = pd.DataFrame({
-            "Filename": [filename],
-            "Content-Type": [content_type],
-            "Size (bytes)": [len(data)]
-        })
-
-        buf = io.BytesIO()
-        with pd.ExcelWriter(buf) as writer:
-            df.to_excel(writer, index=False)
-        buf.seek(0)
-
-        return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                 headers={"Content-Disposition": f"attachment; filename=report_{filename}.xlsx"})
+if __name__ == "__main__":
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
