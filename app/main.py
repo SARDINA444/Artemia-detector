@@ -8,13 +8,16 @@ import torch
 import numpy as np
 import pathlib
 import sys
+import os
 
+current_dir = os.path.dirname(os.path.abspath(__file__))
+model_path = os.path.join(current_dir, 'weights', 'best.pt')
 
 if sys.platform.startswith('win'):
     pathlib.PosixPath = pathlib.WindowsPath
 
 
-model = torch.hub.load("ultralytics/yolov5", "custom", path="weights/best.pt")
+model = torch.hub.load("ultralytics/yolov5", "custom", path=model_path)
 device = torch.device('cpu')
 model.to(device)
 app = FastAPI()
